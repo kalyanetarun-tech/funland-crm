@@ -24,7 +24,7 @@ from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel, Field, EmailStr
 
 # -------------- Setup --------------
-mongo_url = "mongodb://localhost:27017"
+mongo_url = os.getenv("MONGO_URL", "mongodb://localhost:27017")
 client = AsyncIOMotorClient(
     mongo_url,
     serverSelectionTimeoutMS=5000,
