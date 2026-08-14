@@ -1,4 +1,0 @@
-MONGO_URL=mongodb://localhost:27017
-DB_NAME=funland_db
-JWT_SECRET_KEY=funland_secret_key_123
-CORS_ORIGINS=*
