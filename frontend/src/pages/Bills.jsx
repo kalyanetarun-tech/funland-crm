@@ -61,10 +61,10 @@ export function BillDetail() {
   const [addType, setAddType] = useState("item");
   const [newItem, setNewItem] = useState({ name: "", qty: 1, price: 0, gst_percent: 18, category: "item" });
 
-  const load = () => api.get(`/bills/${id}`).then((r) => {
-    setBill(r.data);
-    if ((r.data.gst_amount || 0) > 0) setGstEnabled(true);
-  }).catch((e) => setError(fmtErr(e)));
+  const load = () => api.get(/bills/${id}).then((r) => {
+  setBill(r.data);
+  setGstEnabled(false);
+}).catch((e) => setError(fmtErr(e)));
 
   useEffect(() => { load(); api.get("/settings").then((r) => setSettings(r.data)).catch(() => {}); }, [id]);
 
