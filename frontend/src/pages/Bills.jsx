@@ -12,14 +12,36 @@ import { Switch } from "@/components/ui/switch";
 import QRCode from "react-qr-code";
 import { toast } from "sonner";
 import { Receipt, Send, Printer, MessageCircle, Mail, Phone, ExternalLink, Plus } from "lucide-react";
-import UpiPayBlock from "@/components/UpiPayBlock";
+
+// CUSTOM QR - jo tune bheja tha crop wala
+const CUSTOM_QR_URL = "/qr.png"; // public/qr.png me daal de jo maine diya tha
+const UPI_ID = "linearcurrent@ybl";
+const BANK_DETAILS = {
+  name: "Hotel Linear Inn",
+  acc: "1815070950",
+  ifsc: "KKBK0005963",
+  bank: "Kotak Mahindra Bank"
+};
 
 export function BillsList() {
   const [bills, setBills] = useState(null);
   useEffect(() => { api.get("/bills").then((r) => setBills(r.data)).catch(() => setBills([])); }, []);
   return (
     <div>
-      <PageHead title="Bills" subtitle="Sabhi customer bills aur payment status" />
+      <PageHead 
+        title="Bills" 
+        subtitle="Sabhi customer bills aur payment status" 
+        action={
+          <div className="flex gap-2">
+            <Button onClick={()=>window.print()} variant="outline" className="rounded-full font-bold">
+              <Printer className="h-4 w-4 mr-1" /> Print Bills List
+            </Button>
+            <Link to="/visit">
+              <Button className="rounded-full bg-[#ff5a1f] font-bold"><Plus className="h-4 w-4 mr-1"/> New Bill</Button>
+            </Link>
+          </div>
+        }
+      />
       {bills === null? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {[1,2,3,4,5,6].map((i) => <Card key={i} className="p-5 rounded-2xl h-40 animate-pulse bg-muted" />)}
@@ -38,9 +60,14 @@ export function BillsList() {
                 <div className="text-3xl font-black text-accent">{inr(b.total)}</div>
                 <div className="text-xs text-muted-foreground mt-2">{b.created_at? new Date(b.created_at).toLocaleString() : ""}</div>
               </Link>
-              <Button data-testid={`bill-quick-print-${b.id}`} onClick={(e) => { e.preventDefault(); e.stopPropagation(); window.open(`/bills/${b.id}/print?mode=receipt`, "_blank"); }} variant="outline" size="sm" className="w-full mt-3 rounded-full font-bold border-accent text-accent hover:bg-accent hover:text-accent-foreground">
-                <Printer className="h-4 w-4 mr-1" /> Print Receipt
-              </Button>
+              <div className="flex gap-2 mt-3">
+                <Button data-testid={`bill-quick-print-${b.id}`} onClick={(e) => { e.preventDefault(); e.stopPropagation(); window.open(`/bills/${b.id}/print?mode=receipt`, "_blank"); }} variant="outline" size="sm" className="flex-1 rounded-full font-bold border-accent text-accent hover:bg-accent hover:text-accent-foreground">
+                  <Printer className="h-4 w-4 mr-1" /> Print
+                </Button>
+                <Button onClick={(e)=>{ e.preventDefault(); window.open(`/bills/${b.id}?pay=1`, "_self"); }} size="sm" className="flex-1 rounded-full bg-black text-white font-bold">
+                  Pay
+                </Button>
+              </div>
             </Card>
           ))}
         </div>}
@@ -56,15 +83,15 @@ export function BillDetail() {
   const [error, setError] = useState(null);
   const [sendOpen, setSendOpen] = useState(false);
   const [sendChannel, setSendChannel] = useState("whatsapp");
-  const [gstEnabled, setGstEnabled] = useState(false);
+  const [gstEnabled, setGstEnabled] = useState(false); // AUTO OFF as you asked
   const [addOpen, setAddOpen] = useState(false);
   const [addType, setAddType] = useState("item");
-  const [newItem, setNewItem] = useState({ name: "", qty: 1, price: 0, gst_percent: 18, category: "item" });
+  const [newItem, setNewItem] = useState({ name: "", qty: 1, price: 0, gst_percent: 18, category: "Food & Activities" });
 
-  const load = () => api.get(/bills/${id}).then((r) => {
-  setBill(r.data);
-  setGstEnabled(false);
-}).catch((e) => setError(fmtErr(e)));
+  const load = () => api.get(`/bills/${id}`).then((r) => {
+    setBill(r.data);
+    setGstEnabled(false); // Auto tick OFF
+  }).catch((e) => setError(fmtErr(e)));
 
   useEffect(() => { load(); api.get("/settings").then((r) => setSettings(r.data)).catch(() => {}); }, [id]);
 
@@ -88,15 +115,15 @@ export function BillDetail() {
         qty: Number(newItem.qty),
         price: Number(newItem.price),
         gst_percent: gstEnabled? Number(newItem.gst_percent) : 0,
-        category: addType,
+        category: addType === "item" ? "Food & Activities" : addType,
         kind: addType
       });
       toast.success(`${addType} added`);
       setAddOpen(false);
-      setNewItem({ name: "", qty: 1, price: 0, gst_percent: 18, category: "item" });
+      setNewItem({ name: "", qty: 1, price: 0, gst_percent: 18, category: "Food & Activities" });
       load();
     } catch (e) {
-      const tempBill = {...bill, items: [...(bill.items || []), {...newItem, qty: Number(newItem.qty), price: Number(newItem.price), gst_percent: gstEnabled? Number(newItem.gst_percent) : 0, category: addType, kind: addType }] };
+      const tempBill = {...bill, items: [...(bill.items || []), {...newItem, qty: Number(newItem.qty), price: Number(newItem.price), gst_percent: gstEnabled? Number(newItem.gst_percent) : 0, category: addType === "item" ? "Food & Activities" : addType, kind: addType }] };
       setBill(tempBill);
       toast.success("Locally added");
       setAddOpen(false);
@@ -128,6 +155,7 @@ export function BillDetail() {
   const subtotalCalc = items.reduce((s, it) => s + (it.price || 0) * (it.qty || 0), 0);
   const gstCalc = gstEnabled? items.reduce((s, it) => s + ((it.price || 0) * (it.qty || 0) * ((it.gst_percent || 0)/100)), 0) : 0;
   const finalTotal = subtotalCalc - (bill.discount || 0) + gstCalc;
+  const displayTotal = gstEnabled ? finalTotal : subtotalCalc - (bill.discount || 0);
 
   return (
     <div>
@@ -149,7 +177,7 @@ export function BillDetail() {
           <div className="flex items-start justify-between mb-6 pb-6 border-b border-border">
             <div>
               <div className="font-black text-3xl"><span className="text-accent">Fun</span><span className="text-secondary">land</span></div>
-              <div className="text-sm text-muted-foreground mt-1">{settingsSafe.park_name || "Adventure Park"}</div>
+              <div className="text-sm text-muted-foreground mt-1">{settingsSafe.park_name || "Adventure Park - A Unit of Hotel Linear Inn"}</div>
               <div className="text-xs text-muted-foreground">{settingsSafe.address}</div>
               {settingsSafe.phone && <div className="text-xs text-muted-foreground">Ph: {settingsSafe.phone}</div>}
             </div>
@@ -157,20 +185,22 @@ export function BillDetail() {
               <div className="text-xs uppercase tracking-widest font-bold text-muted-foreground">Invoice</div>
               <div className="font-black text-lg">{bill.bill_no}</div>
               <Badge className={`mt-2 rounded-full ${bill.payment_status === "paid"? "bg-emerald-100 text-emerald-800" : "bg-primary/20 text-accent"}`}>{bill.payment_status}</Badge>
+              {bill.payment_status === "paid" && <div className="mt-2"><Button onClick={()=>window.print()} size="sm" className="rounded-full bg-black text-white"><Printer className="h-3 w-3 mr-1"/> Print</Button></div>}
             </div>
           </div>
 
           <div className="flex items-center justify-between mb-4">
             <div className="flex gap-2">
-              <Button size="sm" onClick={() => { setAddType("item"); setAddOpen(true); }} className="rounded-full"><Plus className="h-4 w-4 mr-1"/> Add Item</Button>
+              <Button size="sm" onClick={() => { setAddType("item"); setNewItem({...newItem, category: "Food & Activities"}); setAddOpen(true); }} className="rounded-full"><Plus className="h-4 w-4 mr-1"/> Add Food & Activities</Button>
               <Button size="sm" variant="outline" onClick={() => { setAddType("activity"); setAddOpen(true); }} className="rounded-full"><Plus className="h-4 w-4 mr-1"/> Add Activity</Button>
               <Button size="sm" variant="outline" onClick={() => { setAddType("package"); setAddOpen(true); }} className="rounded-full"><Plus className="h-4 w-4 mr-1"/> Add Package</Button>
             </div>
-            <div className="flex items-center gap-2">
-              <Label className="text-sm font-bold">GST</Label>
+            <div className="flex items-center gap-2 border px-3 py-1.5 rounded-full">
+              <Label className="text-xs font-bold">GST 18% {gstEnabled ? "ON" : "OFF"}</Label>
               <Switch checked={gstEnabled} onCheckedChange={setGstEnabled} />
             </div>
           </div>
+          {!gstEnabled && <div className="text-[11px] text-gray-500 mb-3 bg-gray-50 p-2 rounded-lg">GST auto OFF hai. Tick karoge tabhi bill me GST lagega aur Tax Invoice print hoga.</div>}
 
           <div className="grid grid-cols-2 gap-4 mb-6 text-sm">
             <div>
@@ -201,7 +231,7 @@ export function BillDetail() {
                 const { gstAmt, total } = calcItem(it);
                 return (
                   <tr key={i} className="border-b border-border">
-                    <td className="py-3 font-semibold">{it.name}<span className="ml-2 text-xs text-muted-foreground uppercase">{it.category || it.kind}</span></td>
+                    <td className="py-3 font-semibold">{it.name}<span className="ml-2 text-xs text-muted-foreground uppercase">{(it.category || it.kind) === "item" ? "Food & Activities" : (it.category || it.kind)}</span></td>
                     <td className="text-right">{it.qty}</td>
                     <td className="text-right">{inr(it.price)}</td>
                     {gstEnabled && <td className="text-right text-xs">{inr(gstAmt)}<br/><span className="text-muted-foreground">({it.gst_percent || 0}%)</span></td>}
@@ -215,10 +245,10 @@ export function BillDetail() {
           <div className="ml-auto max-w-xs space-y-2">
             <Row label="Subtotal" value={inr(subtotalCalc)} />
             {(bill.discount || 0) > 0 && <Row label={`Discount${bill.discount_percent? ` (${bill.discount_percent}%)` : ""}`} value={`- ${inr(bill.discount)}`} />}
-            {gstEnabled && <Row label="GST" value={inr(gstCalc)} />}
+            {gstEnabled && <Row label="GST 18%" value={inr(gstCalc)} />}
             <div className="flex items-center justify-between pt-3 border-t border-border">
               <span className="text-lg font-black">Total</span>
-              <span className="text-3xl font-black text-accent">{inr(gstEnabled? finalTotal : subtotalCalc - (bill.discount || 0))}</span>
+              <span className="text-3xl font-black text-accent">{inr(displayTotal)}</span>
             </div>
           </div>
 
@@ -228,33 +258,62 @@ export function BillDetail() {
         <div className="space-y-4">
           <Card className="p-5 rounded-2xl" data-testid="bill-pay-card">
             <div className="flex items-center justify-between mb-3">
-              <div className="text-xs uppercase tracking-[0.2em] font-bold text-secondary">Pay Now</div>
-              {(settingsSafe.upi_qr_url || settingsSafe.upi_id) && (
-                <Button data-testid="bill-fullscreen-qr" size="sm" onClick={() => setQrOpen(true)} className="rounded-full bg-primary hover:bg-primary/90 h-8 px-3 font-bold text-xs">
-                  Fullscreen QR
-                </Button>
-              )}
+              <div className="text-xs uppercase tracking-[0.2em] font-bold text-secondary">Pay Now - ₹{displayTotal}</div>
+              <Button data-testid="bill-fullscreen-qr" size="sm" onClick={() => setQrOpen(true)} className="rounded-full bg-primary hover:bg-primary/90 h-8 px-3 font-bold text-xs">
+                Fullscreen QR
+              </Button>
             </div>
-            {bill.razorpay_link? (
-              <a href={bill.razorpay_link} target="_blank" rel="noreferrer" className="block p-4 border-2 border-accent rounded-xl text-center font-bold hover:bg-accent hover:text-accent-foreground transition-colors mb-3">Pay via Razorpay <ExternalLink className="inline h-4 w-4" /></a>
-            ) : null}
-            {(settingsSafe.upi_qr_url || settingsSafe.upi_id)? (
-              <UpiPayBlock settings={settingsSafe} amount={gstEnabled? finalTotal : subtotalCalc - (bill.discount || 0)} note={`Bill ${bill.bill_no}`} />
-            ) : null}
+            
+            {/* CUSTOM UPI QR BLOCK - jo tune bheja tha */}
+            <div className="bg-white border-2 border-accent rounded-2xl p-4 text-center">
+              <div className="text-[11px] font-black tracking-widest text-purple-700 mb-2">ACCEPTED HERE</div>
+              <div className="text-[10px] mb-3">Scan & Pay Using PhonePe App</div>
+              <img src={CUSTOM_QR_URL} alt="UPI QR" className="w-64 h-64 mx-auto bg-white rounded-xl object-contain border" onError={(e)=> e.target.style.display='none'} />
+              {/* Fallback QR if custom not found */}
+              <div className="mt-2 flex justify-center">
+                <div className="w-64 h-64 bg-white rounded-xl border-2 border-dashed flex items-center justify-center p-2">
+                  <QRCode value={`upi://pay?pa=${UPI_ID}&pn=${encodeURIComponent(BANK_DETAILS.name)}&am=${Number(displayTotal).toFixed(2)}&cu=INR&tn=Bill ${bill.bill_no}`} size={240} />
+                </div>
+              </div>
+              
+              <div className="mt-4 text-left bg-gray-50 p-3 rounded-xl text-xs space-y-1">
+                <div className="font-bold text-sm">🏦 {BANK_DETAILS.name}</div>
+                <div>🔹 A/c: <b className="text-blue-600">{BANK_DETAILS.acc}</b></div>
+                <div>🔹 IFSC: {BANK_DETAILS.ifsc}</div>
+                <div>🔹 Bank: {BANK_DETAILS.bank}</div>
+                <div className="pt-2 mt-2 border-t">📱 UPI ID: <b className="text-blue-600">{UPI_ID}</b></div>
+              </div>
+              
+              <div className="grid grid-cols-4 gap-2 mt-4">
+                {["Cash","UPI","Card","Online"].map(m=>(
+                  <Button key={m} variant="outline" size="sm" className="rounded-full text-xs font-bold">{m}</Button>
+                ))}
+              </div>
+              
+              <Button onClick={markPaid} className="w-full mt-4 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white font-black h-11">
+                Payment Done ✓ - Print Bill
+              </Button>
+            </div>
+          </Card>
+
+          <Card className="p-4 rounded-2xl bg-amber-50 border-amber-200">
+            <div className="text-xs font-bold mb-1">Payment Done ke baad?</div>
+            <div className="text-xs text-muted-foreground">Cash / UPI / Card koi bhi medium ho, Payment Done pe automatically Print option aa jayega. Bills list ke upar bhi Print button add hai.</div>
           </Card>
         </div>
       </div>
 
       <Dialog open={addOpen} onOpenChange={setAddOpen}>
         <DialogContent className="rounded-2xl">
-          <DialogHeader><DialogTitle className="text-xl font-black">Add {addType}</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle className="text-xl font-black">Add {addType === "item" ? "Food & Activities" : addType}</DialogTitle></DialogHeader>
           <div className="space-y-4">
-            <div><Label>Name</Label><Input value={newItem.name} onChange={(e) => setNewItem({...newItem, name: e.target.value})} placeholder="Name" /></div>
+            <div><Label>Name</Label><Input value={newItem.name} onChange={(e) => setNewItem({...newItem, name: e.target.value})} placeholder={addType === "item" ? "e.g. Aachari Tikka" : "Package/Activity name"} /></div>
             <div className="grid grid-cols-3 gap-3">
               <div><Label>Qty</Label><Input type="number" value={newItem.qty} onChange={(e) => setNewItem({...newItem, qty: e.target.value})} /></div>
               <div><Label>Price</Label><Input type="number" value={newItem.price} onChange={(e) => setNewItem({...newItem, price: e.target.value})} /></div>
-              <div><Label>GST %</Label><Input type="number" value={newItem.gst_percent} disabled={!gstEnabled} onChange={(e) => setNewItem({...newItem, gst_percent: e.target.value})} /></div>
+              <div><Label>GST %</Label><Input type="number" value={newItem.gst_percent} disabled={!gstEnabled} onChange={(e) => setNewItem({...newItem, gst_percent: e.target.value})} placeholder={gstEnabled ? "18" : "OFF"} /></div>
             </div>
+            {!gstEnabled && <div className="text-xs text-amber-600 bg-amber-50 p-2 rounded">GST OFF hai isliye is item pe GST 0 lagega</div>}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setAddOpen(false)} className="rounded-full">Cancel</Button>
@@ -265,15 +324,15 @@ export function BillDetail() {
 
       <Dialog open={qrOpen} onOpenChange={setQrOpen}>
         <DialogContent className="rounded-2xl max-w-lg">
-          <DialogHeader><DialogTitle className="text-2xl font-black text-center">Pay {inr(gstEnabled? finalTotal : subtotalCalc)}</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle className="text-2xl font-black text-center">Pay {inr(displayTotal)} - {BANK_DETAILS.name}</DialogTitle></DialogHeader>
           <div className="p-4 flex flex-col items-center">
-            {settingsSafe.upi_qr_url? (
-              <img src={settingsSafe.upi_qr_url} alt="UPI QR" className="w-72 h-72 object-contain bg-white rounded-2xl border-4 border-accent shadow-2xl" />
-            ) : (
-              <div className="w-72 h-72 bg-white rounded-2xl border-4 border-accent p-3 shadow-2xl">
-                <QRCode value={`upi://pay?pa=${encodeURIComponent(settingsSafe.upi_id || "")}&pn=${encodeURIComponent(settingsSafe.firm_name || settingsSafe.park_name || "Funland")}&am=${Number(gstEnabled? finalTotal : subtotalCalc).toFixed(2)}&cu=INR&tn=${encodeURIComponent("Bill " + bill.bill_no)}`} size={264} />
-              </div>
-            )}
+            <img src={CUSTOM_QR_URL} alt="UPI QR" className="w-80 h-80 object-contain bg-white rounded-2xl border-4 border-accent shadow-2xl" />
+            <div className="mt-4 text-center">
+              <div className="font-bold">Scan & Pay Using PhonePe</div>
+              <div className="text-sm">UPI: <span className="text-blue-600 font-bold">{UPI_ID}</span></div>
+              <div className="text-xs mt-2">{BANK_DETAILS.name} | {BANK_DETAILS.acc} | {BANK_DETAILS.ifsc}</div>
+            </div>
+            <Button onClick={()=>{ setQrOpen(false); markPaid(); }} className="mt-6 w-full rounded-full bg-emerald-600 h-12 font-black">Payment Done - Print</Button>
           </div>
         </DialogContent>
       </Dialog>
