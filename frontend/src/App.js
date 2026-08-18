@@ -12,6 +12,7 @@ import Games from "@/pages/Games";
 import Packages from "@/pages/Packages";
 import NewVisit from "@/pages/NewVisit";
 import { BillsList, BillDetail } from "@/pages/Bills";
+import NewBill from "@/pages/NewBill";
 import Attendance from "@/pages/Attendance";
 import Staff from "@/pages/Staff";
 import Marketing from "@/pages/Marketing";
@@ -58,6 +59,7 @@ function App() {
             <Route path="/prebookings" element={<Protected perm="prebookings"><Prebookings /></Protected>} />
             <Route path="/inquiries" element={<Protected perm="inquiries"><Inquiries /></Protected>} />
             <Route path="/visit" element={<Protected perm="visit"><NewVisit /></Protected>} />
+            <Route path="/bills/new" element={<Protected perm="bills"><NewBill /></Protected>} />
             <Route path="/bills" element={<Protected perm="bills"><BillsList /></Protected>} />
             <Route path="/bills/:id" element={<Protected perm="bills"><BillDetail /></Protected>} />
             <Route path="/bills/:id/print" element={<PrintBill />} />
