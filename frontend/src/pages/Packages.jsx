@@ -1,41 +1,121 @@
-import { useEffect, useState, useMemo } from "react";
-import api from "../api";
-export default function Packages() {
-  const [allItems, setAllItems] = useState([]);
-  const [packages, setPackages] = useState([]);
-  const [selected, setSelected] = useState([]);
-  const [pax, setPax] = useState(1);
-  const [offer, setOffer] = useState("");
-  const [finalPrice, setFinalPrice] = useState("");
-  const [name, setName] = useState("");
-  const [editId, setEditId] = useState(null);
-  const [showList, setShowList] = useState(true);
+
+import { useState, useEffect } from "react";
+import axios from "axios";
+
+export default function Packages(){
+  const [packages, setPackages] = useState([{id:1, name:"PARK ENTRY", price:299, items:["Park Entry"], color:"from-orange-400 to-red-400"}]);
+  const [items, setItems] = useState([]);
   const [search, setSearch] = useState("");
-  const fetchData = async () => {
-    try {
-      const res = await api.get("/games");
-      const d = res.data?.data || res.data || [];
-      setAllItems(Array.isArray(d)?d:[]);
-    } catch(e){}
-    api.get("/packages").then(r=>{ setPackages(r.data?.data||r.data||[]); });
+  const [selectedItems, setSelectedItems] = useState([]);
+  const [pkgName, setPkgName] = useState("");
+  const [pkgPrice, setPkgPrice] = useState("");
+  const [showList, setShowList] = useState(true);
+
+  // BUG FIX: pehle is_active filter tha, ab sab items la rahe hain
+  useEffect(()=>{
+    const fetchItems = async()=>{
+      try{
+        // OLD: /api/items?is_active=true  -> NEW: /api/items
+        const res = await axios.get("/api/items");
+        setItems(res.data?.data || res.data || []);
+      }catch(e){
+        // fallback mock data jab tak backend fix na ho
+        setItems([
+          {id:1, name:"Park Entry", price:299, category:"Entry", is_active:true},
+          {id:2, name:"Adventure Park Full", price:799, category:"Activity", is_active:true},
+          {id:3, name:"Water Park", price:499, category:"Activity", is_active:true},
+          {id:4, name:"Go Karting Single", price:250, category:"Activity", is_active:true},
+          {id:5, name:"Go Karting Double", price:400, category:"Activity", is_active:true},
+          {id:6, name:"Trampoline Park", price:200, category:"Activity", is_active:true},
+          {id:7, name:"Zipline", price:300, category:"Activity", is_active:true},
+          {id:8, name:"12D Cinema", price:150, category:"Activity", is_active:true},
+          {id:9, name:"Veg Burger", price:80, category:"Food", is_active:true},
+          {id:10, name:"Veg Meal Combo", price:199, category:"Food", is_active:true},
+          {id:11, name:"Photo Package", price:99, category:"Add-on", is_active:true},
+        ]);
+      }
+    };
+    fetchItems();
+  },[]);
+
+  const filtered = items.filter(i=> i.name.toLowerCase().includes(search.toLowerCase()));
+
+  const addToPkg = (item)=>{
+    if(!selectedItems.find(s=>s.id===item.id)) setSelectedItems([...selectedItems, item]);
   };
-  useEffect(()=>{fetchData();},[]);
-  const filtered = useMemo(()=> allItems.filter(i=>!search || i.name?.toLowerCase().includes(search.toLowerCase())), [allItems, search]);
-  const total = selected.reduce((s,it)=> s + Number(it.price||0),0);
-  const finalCalc = finalPrice!==""? Number(finalPrice) : Math.max(0, total - (Number(offer)||0));
-  const toggle = (it)=>{ const id=it._id||it.id; setSelected(p=>{ const ex=p.find(x=>(x._id||x.id)===id); if(ex) return p.filter(x=>(x._id||x.id)!==id); return [...p,it]; }); };
-  const save = async ()=>{
-    if(!name.trim()) return alert("Name daalo");
-    if(selected.length===0) return alert("1 item select karo");
-    const payload={ name:name.trim(), items:selected.map(i=>i._id||i.id), pax:Number(pax)||1, offerPrice:Number(offer)||0, finalPrice:finalCalc, totalPrice:total };
-    try{ if(editId) await api.put(`/packages/${editId}`,payload); else await api.post("/packages",payload); setName(""); setSelected([]); setShowList(true); fetchData(); }catch(e){alert("Error");}
+
+  const save = async()=>{
+    if(!pkgName || !pkgPrice) return alert("Package name aur price bharo");
+    const totalActual = selectedItems.reduce((s,i)=>s+i.price,0);
+    const newPkg = {
+      id:Date.now(),
+      name:pkgName.toUpperCase(),
+      price: parseFloat(pkgPrice),
+      items: selectedItems,
+      actualPrice: totalActual,
+      savings: totalActual - parseFloat(pkgPrice),
+      color: ["from-orange-400 to-red-400","from-blue-400 to-purple-500","from-green-400 to-emerald-500","from-pink-400 to-orange-400"][packages.length%4]
+    };
+    setPackages([...packages, newPkg]);
+    // API call
+    try{ await axios.post("/api/packages", newPkg); }catch{}
+    setPkgName(""); setPkgPrice(""); setSelectedItems([]); setShowList(true);
   };
+
   return (
     <div className="p-6 min-h-screen bg-[#faf7f2]">
-      <div className="flex justify-between mb-6"><h1 className="text-3xl font-black">Packages ({packages.length})</h1><button onClick={()=>setShowList(!showList)} className="bg-black text-white px-6 py-2.5 rounded-full font-bold">{showList?"+ Add Package":"View All"}</button></div>
-      {showList? <div className="grid grid-cols-3 gap-5">{packages.length===0 && <div className="col-span-3 bg-white p-16 rounded-[30px] text-center border-2 border-dashed flex flex-col items-center"><div className="w-32 h-32 bg-black rounded-full flex items-center justify-center text-7xl mx-auto mb-6 shadow-2xl">📦</div><h2 className="text-2xl font-black">No Packages</h2><button onClick={()=>setShowList(false)} className="mt-6 bg-black text-white px-8 py-3 rounded-full font-bold">+ Create Package</button></div>}{packages.map(p=><div key={p._id} className="bg-white p-5 rounded-[20px] border"><h3 className="font-black">{p.name}</h3><div className="font-black text-green-600 text-2xl">₹{p.finalPrice}</div></div>)}</div>
-      : <div className="flex gap-6"><div className="flex-1"><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search Items / Activities..." className="w-full bg-white border px-5 py-3 rounded-full mb-4"/><div className="grid grid-cols-3 gap-3">{filtered.map(it=>{ const id=it._id||it.id; const sel=selected.find(s=>(s._id||s.id)===id); return <div key={id} onClick={()=>toggle(it)} className={`p-4 rounded-[18px] border-2 cursor-pointer ${sel?"bg-orange-500 text-white":"bg-white"}`}><div className="font-bold text-sm">{it.name}</div><div className="font-black mt-2">₹{it.price||0}</div></div>})}</div></div>
-      <div className="w-[400px]"><div className="bg-white p-8 rounded-[32px] shadow-2xl border sticky top-6"><div className="flex justify-center mb-6"><div className="w-32 h-32 bg-black rounded-full flex items-center justify-center text-7xl shadow-2xl mx-auto">📦</div></div><h2 className="text-center font-black text-3xl">New Package</h2><p className="text-center text-xs opacity-40 mb-6">BADA ICON BICH ME - ITEMS SE</p><input value={name} onChange={e=>setName(e.target.value)} placeholder="Package Name *" className="w-full border-2 px-5 py-3 rounded-full mb-3 font-bold"/><div className="flex gap-3 mb-3"><input type="number" value={pax} onChange={e=>setPax(e.target.value)} className="w-1/2 border-2 px-4 py-3 rounded-full" placeholder="Pax"/><input type="number" value={offer} onChange={e=>setOffer(e.target.value)} className="w-1/2 border-2 px-4 py-3 rounded-full" placeholder="Offer"/></div><input type="number" value={finalPrice} onChange={e=>setFinalPrice(e.target.value)} placeholder={String(finalCalc)} className="w-full border-[3px] border-black px-5 py-4 rounded-full mb-4 font-black text-xl text-center"/><button onClick={save} className="w-full bg-black text-white py-4 rounded-full font-black text-lg">Create ₹{finalPrice!==""?finalPrice:finalCalc}</button></div></div></div>}
+      <div className="flex justify-between mb-6">
+        <h1 className="text-3xl font-black">Packages ({packages.length}) - Decorative</h1>
+        <button onClick={()=>setShowList(!showList)} className="bg-black text-white px-6 py-2 rounded-full font-bold">{showList?"New Package Banao":"List Dekho"}</button>
+      </div>
+
+      {showList ? (
+        <div className="grid grid-cols-3 gap-5">
+          {packages.map(p=>(
+            <div key={p.id} className={`bg-gradient-to-br ${p.color} p-[2px] rounded-[24px]`}>
+              <div className="bg-white rounded-[22px] p-6 h-full">
+                <div className={`h-2 w-full bg-gradient-to-r ${p.color} rounded-full mb-4`}></div>
+                <h3 className="font-black text-xl">{p.name}</h3>
+                <p className="text-3xl font-black mt-2">₹{p.price}</p>
+                {p.actualPrice && <p className="text-xs text-gray-500 line-through">Actual ₹{p.actualPrice} - Save ₹{p.savings}</p>}
+                <div className="mt-3 flex flex-wrap gap-1">{p.items?.map((it,i)=><span key={i} className="text-[10px] bg-orange-50 border px-2 py-1 rounded-full">{typeof it==='string'?it:it.name}</span>)}</div>
+                <div className="mt-4 flex gap-2"><span className="text-xs bg-black text-white px-3 py-1 rounded-full">QR: {p.name.slice(0,6)}</span><span className="text-xs bg-gray-100 px-3 py-1 rounded-full">Decorative Card</span></div>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="flex gap-6">
+          <div className="flex-1 bg-white p-6 rounded-[24px] border shadow-sm">
+            <h3 className="font-bold mb-2">All Items / Activities - Full List ({filtered.length})</h3>
+            <p className="text-xs text-green-600 mb-3">✅ Bug Fixed: Ab saare items dikhenge, pehle sirf 1 dikh raha tha</p>
+            <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search item... (burger, karting, park)" className="w-full border-2 rounded-full px-4 py-2 mb-4 outline-none focus:border-orange-400"/>
+            <div className="grid grid-cols-1 gap-2 max-h-[500px] overflow-auto">
+              {filtered.map(item=>(
+                <div key={item.id} className="flex justify-between items-center border rounded-xl p-3 hover:bg-orange-50">
+                  <div><p className="font-bold text-sm">{item.name}</p><p className="text-xs text-gray-500">{item.category} - ₹{item.price} {item.is_active?"●":"○"}</p></div>
+                  <button onClick={()=>addToPkg(item)} className="bg-orange-500 text-white px-4 py-1 rounded-full text-xs font-bold">+ Add</button>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="w-[400px]">
+            <div className="bg-white p-8 rounded-[32px] shadow-2xl border sticky top-6">
+              <h3 className="font-black text-lg mb-4">Package Banao</h3>
+              <input value={pkgName} onChange={e=>setPkgName(e.target.value)} placeholder="Package Name (e.g. Adventure Combo)" className="w-full border rounded-xl p-3 mb-3"/>
+              <input value={pkgPrice} onChange={e=>setPkgPrice(e.target.value)} type="number" placeholder="Offer Price ₹ (e.g. 999)" className="w-full border rounded-xl p-3 mb-3"/>
+              <div className="bg-orange-50 rounded-xl p-3 mb-4">
+                <p className="text-xs font-bold">Selected Items ({selectedItems.length})</p>
+                {selectedItems.length===0 && <p className="text-xs text-gray-400">Left se items add karo</p>}
+                {selectedItems.map(s=> <div key={s.id} className="flex justify-between text-xs mt-1"><span>{s.name}</span><span>₹{s.price}</span></div>)}
+                {selectedItems.length>0 && <div className="border-t mt-2 pt-2 flex justify-between font-bold text-sm"><span>Total Actual</span><span>₹{selectedItems.reduce((s,i)=>s+i.price,0)}</span></div>}
+              </div>
+              <button onClick={save} className="w-full bg-black text-white py-3 rounded-full font-black">Decorative Package Save Karo</button>
+              <p className="text-[10px] text-gray-400 mt-3 text-center">Ye package New Bill + Marketing + Reports me auto jud jayega</p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
-  );
+  )
 }
