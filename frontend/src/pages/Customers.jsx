@@ -46,4 +46,5 @@ function Customers() {
 }
 
 export const CustomersList = Customers
+export const CustomerDetail = Customers
 export default Customers
