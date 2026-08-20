@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react"
 
-export default function Customers() {
+function Customers() {
   const [customers, setCustomers] = useState([])
   const [sortBy, setSortBy] = useState("spent")
   const [search, setSearch] = useState("")
@@ -44,3 +44,6 @@ export default function Customers() {
     </div>
   )
 }
+
+export const CustomersList = Customers
+export default Customers
