@@ -3,7 +3,6 @@ import { useNavigate } from "react-router-dom";
 import { api } from "@/lib/api";
 import PaymentModal from "./PaymentModal";
 import { toast } from "sonner";
-
 export default function NewVisit(){
   const navigate = useNavigate();
   const [items, setItems] = useState([]);
